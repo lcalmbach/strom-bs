@@ -29,11 +29,11 @@ div[data-testid="metric-container"] > label[data-testid="stMetricLabel"] > div {
     color: black;
 }
 
-/* Hide Streamlit bars */
+/* Hide Streamlit bars 
 #MainMenu {
     visibility: hidden;
 }
-
+*/
 footer {
     visibility: hidden;
 }
