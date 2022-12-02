@@ -4,6 +4,7 @@ import numpy as np
 import altair as alt
 import datetime
 
+MONTHS_REV_DICT = {'Jan':1, 'Feb':2, 'Mrz':3, 'Apr':4, 'Mai':5, 'Jun':6, 'Jul':7, 'Aug':8, 'Sep':9,'Okt':10,'Nov':11,'Dez':12}
 
 def line_chart(df, settings):
     title = settings['title'] if 'title' in settings else ''
@@ -28,3 +29,26 @@ def line_chart(df, settings):
     plot = chart.properties(width=settings['width'], height=settings['height'], title=title)
     st.altair_chart(plot)
 
+def barchart(df, settings):
+    title = settings['title'] if 'title' in settings else ''
+    """
+    chart = alt.Chart(df).mark_bar().encode(
+        x=alt.X(f'year:N', axis=alt.Axis(title='', labelAngle=90)),
+        y=alt.Y(f'stromverbrauch_kwh:Q', title=settings['y_title'], axis=alt.Axis(grid=False)),
+        column = alt.Column('month:N',title=""),
+        color='year:N',
+        tooltip=settings['tooltip']
+        ).configure_view(
+            stroke=None,
+        )
+    """
+    chart = alt.Chart(df).mark_bar().encode(
+        x=alt.X('sum(stromverbrauch_kwh):Q', title=settings['x_title']),
+        y=alt.Y('year:O', title=settings['y_title']),
+        color='year:N',
+        row=alt.Row('month:N', sort=list(MONTHS_REV_DICT.keys()) ),
+        tooltip=settings['tooltip']
+    )
+
+    plot = chart.properties(width=settings['width'], height=settings['height'], title=title)
+    st.altair_chart(plot)

@@ -1,9 +1,12 @@
 import streamlit as st
 from streamlit_option_menu import option_menu
 import pandas as pd
-import plots
+from os.path import exists
 from datetime import datetime, timedelta, date
 from utilities import load_css
+
+import plots
+
 
 __version__ = '0.0.1'
 __author__ = 'Lukas Calmbach'
@@ -11,7 +14,8 @@ __author_email__ = 'lcalmbach@gmail.com'
 VERSION_DATE = '2022-12-02'
 my_name = 'Verbrauch Elektrizität im Kanton Basel-Stadt'
 my_kuerzel = "ElV-bs"
-SOURCE_FILE = '100233.csv'
+SOURCE_FILE = './100233.csv'
+PARQUET_FILE = SOURCE_FILE.replace('csv', 'gzip')
 SOURCE_URL = 'https://data.bs.ch/explore/dataset/100233'
 GIT_REPO = 'https://github.com/lcalmbach/strom-bs'
 
@@ -19,13 +23,18 @@ GIT_REPO = 'https://github.com/lcalmbach/strom-bs'
 def_options_days = (1, 365)
 def_options_hours = (0, 23)
 def_options_weeks = (1, 53)
+def_options_months = (1,12)
 CURRENT_YEAR = date.today().year
 FIRST_YEAR = 2012
+MONTH_DICT = {1:'Jan',2:'Feb',3:'Mrz',
+    4:'Apr',5:'Mai',6:'Jun',
+    7:'Jul', 8:'Aug', 9:'Sep', 
+    10:'Okt', 11:'Nov', 12:'Dez'}
 
 def init():
     st.set_page_config(  # Alternate names: setup_page, page, layout
         initial_sidebar_state = "auto", 
-        page_title = 'E-Verbrauch-bs', 
+        page_title = 'e-Verbrauch-bs', 
         page_icon = '⚡',
     )
     load_css()
@@ -43,7 +52,6 @@ def get_info(last_date):
 @st.experimental_memo(ttl=6*3600, max_entries=3)
 def get_data():
     def add_aggregation_codes(df):
-        df['timestamp_interval_start'] = pd.to_datetime(df['timestamp_interval_start'], utc=True, errors='coerce')
         df['year'] = df['timestamp_interval_start'].dt.year
         df['day'] = 15
         df['month'] = 7
@@ -67,9 +75,15 @@ def get_data():
         df = df[df['year'] > 2011]
         return df
 
-    df = pd.read_csv(SOURCE_FILE,sep=';')
-    fields = ['timestamp_interval_start','stromverbrauch_kwh']
-    df = df[fields]
+    if exists(PARQUET_FILE):
+        df = pd.read_parquet(PARQUET_FILE)
+    else:
+        df = pd.read_csv(SOURCE_FILE, sep=';')
+        fields = ['timestamp_interval_start', 'stromverbrauch_kwh']
+        df['timestamp_interval_start'] = pd.to_datetime(df['timestamp_interval_start'], utc=True, errors='coerce')
+        df = df[fields]
+        df.to_parquet(PARQUET_FILE, compression='gzip')
+    
     df = add_aggregation_codes(df)
     df['stromverbrauch_kwh'] = df['stromverbrauch_kwh'] / 1e6
     # df = add_aggregation_codes(df)
@@ -154,6 +168,39 @@ def consumption_day(df):
     df_time['stromverbrauch_kwh'] = df_time['stromverbrauch_kwh'].round(1)
     show_plot(df_time)
 
+def consumption_month(df):
+    def show_plot(df):
+        settings = {'x': 'year', 'x_dt': 'N', 'y':'stromverbrauch_kwh', 'color':'year:O', 
+            'tooltip':['year','month', 'stromverbrauch_kwh'], 
+            'column':'month', 'col_dt': 'N', 'width':700,'height':200, 
+            'title': 'Monatsvergleich, Stromverbrauch',
+            'y_title': '',
+            'x_title': 'Stromverbrauch(GWh)'}
+        
+        plots.barchart(df, settings)
+
+    def get_filtered_data(df):
+        with st.sidebar.expander('🔎 Filter', expanded=True):
+            sel_months = st.slider('Auswahl Monate im Jahr', min_value=1, max_value=12, value=def_options_months)
+            st.markdown(get_interval_dates(sel_months))
+            
+            sel_years = st.multiselect('Auswahl Jahre', options=range(FIRST_YEAR,CURRENT_YEAR+1), help="keine Auswahl = alle Jahre")
+            if sel_months != def_options_days:
+                df = df[(df['month'] >= sel_months[0]) & (df['month'] <= sel_months[1])]
+        if sel_years:
+            df = df[df['year'].isin(sel_years)]
+        return df
+
+    df_month = get_filtered_data(df.copy())
+    df_month['stromverbrauch_kwh'] = df_month['stromverbrauch_kwh'] 
+    fields = ['year', 'month', 'stromverbrauch_kwh']
+    agg_fields = ['year','month']
+    df_month = df_month[fields].groupby(agg_fields).sum().reset_index()
+    df_month['stromverbrauch_kwh'] = df_month['stromverbrauch_kwh'].round(1)
+    df_month['month'] = df_month['month'].replace(MONTH_DICT)
+    show_plot(df_month)
+
+
 def consumption_week(df):
     """
     Shows line-plot day of week day versus average consumption, one line per year
@@ -188,7 +235,7 @@ def consumption_week(df):
     fields = ['year', 'week_time', 'stromverbrauch_kwh']
     agg_fields = ['year','week_time']
     df_time = df_time[fields].groupby(agg_fields).mean().reset_index()
-    df_time['stromverbrauch_kwh'] =df_time['stromverbrauch_kwh'].round(1)
+    df_time['stromverbrauch_kwh'] = df_time['stromverbrauch_kwh'].round(1)
     show_plot(df_time)
 
 def main():
@@ -198,21 +245,24 @@ def main():
     """
     init()
     df = get_data()
-    st.markdown(f"### Bruttoverbrauch elektrische Energie der Stadt Zürich, seit {FIRST_YEAR}")
+    st.markdown(f"### Verbrauch elektrische Energie des Kanton Basel-Stadt, seit {FIRST_YEAR}")
     st.sidebar.markdown("### ⚡ Verbrauch-bs")
 
-    menu_options = ['Jahresverlauf', 'Tagesverlauf', 'Wochenverbrauch']
+    menu_options = ['Jahresverlauf', 'Montsvergleich', 'Wochenverbrauch', 'Tagesverlauf']
     with st.sidebar:
         menu_action = option_menu(None, menu_options, 
-        icons=['calendar', 'clock', 'calendar'], 
+        icons=['calendar', 'calendar', 'calendar', 'clock'], 
         menu_icon="cast", default_index=0)
 
     if menu_action == menu_options[0]:
         consumption_year(df)
     elif menu_action == menu_options[1]:
-        consumption_day(df)
+        consumption_month(df)
     elif menu_action == menu_options[2]:
         consumption_week(df)
+    elif menu_action == menu_options[3]:
+        consumption_day(df)
+
 
     st.sidebar.markdown(get_info(df['timestamp_interval_start'].max()), unsafe_allow_html=True)
 
