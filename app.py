@@ -4,14 +4,15 @@ import pandas as pd
 from os.path import exists
 from datetime import datetime, timedelta, date
 from utilities import load_css
-
+import requests
 import plots
+import config
+import text
 
-
-__version__ = '0.0.1'
+__version__ = '0.0.2'
 __author__ = 'Lukas Calmbach'
 __author_email__ = 'lcalmbach@gmail.com'
-VERSION_DATE = '2022-12-02'
+VERSION_DATE = '2022-12-14'
 my_name = 'Verbrauch Elektrizität im Kanton Basel-Stadt'
 my_kuerzel = "ElV-bs"
 SOURCE_FILE = './100233.csv'
@@ -168,6 +169,21 @@ def consumption_day(df):
     df_time['stromverbrauch_kwh'] = df_time['stromverbrauch_kwh'].round(1)
     show_plot(df_time)
 
+@st.experimental_memo(ttl=6*3600, max_entries=3)
+def get_temperature_data():
+    url = config.url_daily_temperature
+    response = requests.get(url)
+    data = response.json()
+    df = [{'Year': x['record']['fields']['year(datum_zeit)'], 
+            'Month': x['record']['fields']['month(datum_zeit)'], 
+            'Day': x['record']['fields']['day(datum_zeit)'], 
+            'temperatur': x['record']['fields']['avg_temp_c']} for x in data['records']]
+    df = pd.DataFrame(df)
+    df[['Year', 'Month', 'Day']] = df[['Year', 'Month', 'Day']].astype(int)
+    df['temperatur'] = df['temperatur'].astype(float)
+    df['date'] = pd.to_datetime(df[['Year', 'Month', 'Day']])
+    return df
+
 def consumption_month(df):
     def show_plot(df):
         settings = {'x': 'year', 'x_dt': 'N', 'y':'stromverbrauch_kwh', 'color':'year:O', 
@@ -238,6 +254,30 @@ def consumption_week(df):
     df_time['stromverbrauch_kwh'] = df_time['stromverbrauch_kwh'].round(1)
     show_plot(df_time)
 
+def comparison_temp(df_consumption:pd.DataFrame):
+    def show_plot(df, title):
+        settings = {'x': 'temperatur', 'y':'stromverbrauch_kwh', 'color':'Month:O', 'tooltip':['date', 'stromverbrauch_kwh', 'temperatur'], 
+                'width':800,'height':400, 'title': title,
+                'x_title': 'Temperatur °C', 'y_title': 'Verbrauch [MWh]', 'y_domain': [2000, 4000]}
+        
+        plots.scatter_plot(df, settings)
+
+    df_temp = get_temperature_data()
+    fields = ['date', 'stromverbrauch_kwh']
+    agg_fields = ['date']
+    df_consumption = df_consumption[fields].groupby(agg_fields).sum().reset_index()
+    df_consumption['stromverbrauch_kwh']=df_consumption['stromverbrauch_kwh']*1e3 #convert to MWh
+    df = pd.merge(df_temp, df_consumption, on = "date", how = "inner")
+    df_week_day = df[df['date'].dt.weekday.isin([0,1,2,3,4])]
+    df_weekend_day = df[df['date'].dt.weekday.isin([5,6])]
+    title = 'Stromverbrauch in Funktion der mittleren Tagestemperatur im 2022, an Wochentagen'
+    show_plot(df_week_day, title)
+    title = 'Stromverbrauch in Funktion der mittleren Tagestemperatur im 2022, an Wochenend-Tagen'
+    st.markdown(text.temp_verbr_weekday_legend, unsafe_allow_html=True)
+    show_plot(df_weekend_day, title)
+    st.markdown(text.temp_verbr_weekend_legend, unsafe_allow_html=True)
+    return df
+
 def main():
     """
     main menu with 3 options: cum consumption year of day, mean daily consumption in week 
@@ -248,10 +288,10 @@ def main():
     st.markdown(f"### Verbrauch elektrische Energie des Kanton Basel-Stadt, seit {FIRST_YEAR}")
     st.sidebar.markdown("### ⚡ Verbrauch-bs")
 
-    menu_options = ['Jahresverlauf', 'Montsvergleich', 'Wochenverbrauch', 'Tagesverlauf']
+    menu_options = ['Jahresverlauf', 'Montsvergleich', 'Wochenverbrauch', 'Tagesverlauf', 'Vergleich E-Verbrauch/Temp']
     with st.sidebar:
         menu_action = option_menu(None, menu_options, 
-        icons=['calendar', 'calendar', 'calendar', 'clock'], 
+        icons=['calendar', 'calendar', 'calendar', 'clock', 'thermometer'], 
         menu_icon="cast", default_index=0)
 
     if menu_action == menu_options[0]:
@@ -262,6 +302,8 @@ def main():
         consumption_week(df)
     elif menu_action == menu_options[3]:
         consumption_day(df)
+    elif menu_action == menu_options[4]:
+        comparison_temp(df)
 
 
     st.sidebar.markdown(get_info(df['timestamp_interval_start'].max()), unsafe_allow_html=True)

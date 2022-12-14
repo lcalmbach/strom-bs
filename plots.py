@@ -29,6 +29,41 @@ def line_chart(df, settings):
     plot = chart.properties(width=settings['width'], height=settings['height'], title=title)
     st.altair_chart(plot)
 
+
+def scatter_plot(df, settings):
+    title = settings['title'] if 'title' in settings else ''
+    if 'x_labels' in settings:
+        x_axis = alt.Axis(values=settings['x_labels'])
+    else:
+        x_axis = alt.Axis()
+    if 'x_title' not in settings:
+        settings['x_title'] = ''
+    if 'y_title' not in settings:
+        settings['y_title'] = ''
+    
+    chart = alt.Chart(df).mark_circle(size=60, clip=True).encode(
+        x=alt.X(f"{settings['x']}:Q", title = settings['x_title'], axis=x_axis),
+        y=alt.Y(f"{settings['y']}:Q", title = settings['y_title'], scale=alt.Scale(domain=settings['y_domain'])),
+        color = alt.Color(f"{settings['color']}",
+                    scale=alt.Scale(scheme=alt.SchemeParams(name='rainbow'))),
+        tooltip=settings['tooltip']
+    )
+
+    line = alt.Chart(df).mark_line(
+    color='red',
+    size=3
+    ).transform_window(
+        rolling_mean=f"mean({settings['y']})",
+        frame=[-60, 60]
+    ).encode(
+        x=settings['x'],
+        y='rolling_mean:Q'
+    )
+    
+    plot = chart.properties(width=settings['width'], height=settings['height'], title=title)
+    st.altair_chart(plot)
+
+
 def barchart(df, settings):
     title = settings['title'] if 'title' in settings else ''
     """
