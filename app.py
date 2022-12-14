@@ -9,7 +9,7 @@ import plots
 import config
 import text
 
-__version__ = '0.0.2'
+__version__ = '0.0.3'
 __author__ = 'Lukas Calmbach'
 __author_email__ = 'lcalmbach@gmail.com'
 VERSION_DATE = '2022-12-14'
@@ -27,10 +27,7 @@ def_options_weeks = (1, 53)
 def_options_months = (1,12)
 CURRENT_YEAR = date.today().year
 FIRST_YEAR = 2012
-MONTH_DICT = {1:'Jan',2:'Feb',3:'Mrz',
-    4:'Apr',5:'Mai',6:'Jun',
-    7:'Jul', 8:'Aug', 9:'Sep', 
-    10:'Okt', 11:'Nov', 12:'Dez'}
+
 
 def init():
     st.set_page_config(  # Alternate names: setup_page, page, layout
@@ -213,7 +210,7 @@ def consumption_month(df):
     agg_fields = ['year','month']
     df_month = df_month[fields].groupby(agg_fields).sum().reset_index()
     df_month['stromverbrauch_kwh'] = df_month['stromverbrauch_kwh'].round(1)
-    df_month['month'] = df_month['month'].replace(MONTH_DICT)
+    df_month['month'] = df_month['month'].replace(config.MONTH_DICT)
     show_plot(df_month)
 
 
@@ -256,7 +253,7 @@ def consumption_week(df):
 
 def comparison_temp(df_consumption:pd.DataFrame):
     def show_plot(df, title):
-        settings = {'x': 'temperatur', 'y':'stromverbrauch_kwh', 'color':'Month:O', 'tooltip':['date', 'stromverbrauch_kwh', 'temperatur'], 
+        settings = {'x': 'temperatur', 'y':'stromverbrauch_kwh', 'color':'Monat:O', 'tooltip':['date', 'stromverbrauch_kwh', 'temperatur'], 
                 'width':800,'height':400, 'title': title,
                 'x_title': 'Temperatur °C', 'y_title': 'Verbrauch [MWh]', 'y_domain': [2000, 4000]}
         
@@ -268,9 +265,11 @@ def comparison_temp(df_consumption:pd.DataFrame):
     df_consumption = df_consumption[fields].groupby(agg_fields).sum().reset_index()
     df_consumption['stromverbrauch_kwh']=df_consumption['stromverbrauch_kwh']*1e3 #convert to MWh
     df = pd.merge(df_temp, df_consumption, on = "date", how = "inner")
+    df['Monat'] = df['Month'].replace(config.MONTH_DICT)
+    df = df.sort_values(by='date')
     df_week_day = df[df['date'].dt.weekday.isin([0,1,2,3,4])]
     df_weekend_day = df[df['date'].dt.weekday.isin([5,6])]
-    title = 'Stromverbrauch in Funktion der mittleren Tagestemperatur im 2022, an Wochentagen'
+    title = 'Stromverbrauch in Funktion der mittleren Tagestemperatur im 2022, an Werktagen'
     show_plot(df_week_day, title)
     title = 'Stromverbrauch in Funktion der mittleren Tagestemperatur im 2022, an Wochenend-Tagen'
     st.markdown(text.temp_verbr_weekday_legend, unsafe_allow_html=True)

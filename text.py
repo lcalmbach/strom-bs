@@ -3,5 +3,5 @@ Das XY-Diagramm zeigt den täglichen Stromverbrauch in Funktion der Tagestempera
 """
 
 temp_verbr_weekend_legend = """
-An den Wochenenden ist der Verbrauch generell etwa 600 MWh/Tag tiefer als an den Wochentagen. Dies macht ca. 18% des Verbrauchs aus. Die Differenz ist auf den am Wochenende stark reduzierte Verbrauch von Industrie- und Dienstleistungsbetrieben, sowie beim öffentlichen Verkehr, zurückzuführen. Es ist das gleiche U-förmige Muster der Verbräuche in Funktion der Temperatur erkennbar wie bei den Wochentagen. Auch die Differenz von 400  bis 500 MWh/Tag zwischen sehr kalten oder sehr warmen Perioden und Tagen mit Temperaturen von 12-16°C ist in ähnlich.<br><br>
+An den Wochenenden ist der Verbrauch generell etwa 600 MWh/Tag tiefer als an den Werktagen. Dies macht ca. 18% des Verbrauchs aus. Die Differenz ist auf den am Wochenende stark reduzierte Verbrauch von Industrie- und Dienstleistungsbetrieben, sowie beim öffentlichen Verkehr, zurückzuführen. Es ist das gleiche U-förmige Muster der Verbräuche in Funktion der Temperatur erkennbar wie bei den Wochentagen. Auch die Differenz von 400  bis 500 MWh/Tag zwischen sehr kalten oder sehr warmen Perioden und Tagen mit Temperaturen von 12-16°C ist in ähnlich.<br><br>
 """

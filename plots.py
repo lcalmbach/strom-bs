@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import altair as alt
-import datetime
+import config
 
 MONTHS_REV_DICT = {'Jan':1, 'Feb':2, 'Mrz':3, 'Apr':4, 'Mai':5, 'Jun':6, 'Jul':7, 'Aug':8, 'Sep':9,'Okt':10,'Nov':11,'Dez':12}
 
@@ -45,7 +45,8 @@ def scatter_plot(df, settings):
         x=alt.X(f"{settings['x']}:Q", title = settings['x_title'], axis=x_axis),
         y=alt.Y(f"{settings['y']}:Q", title = settings['y_title'], scale=alt.Scale(domain=settings['y_domain'])),
         color = alt.Color(f"{settings['color']}",
-                    scale=alt.Scale(scheme=alt.SchemeParams(name='rainbow'))),
+                    scale=alt.Scale(scheme=alt.SchemeParams(name='rainbow')),
+                    sort = list(config.MONTH_DICT.values())),
         tooltip=settings['tooltip']
     )
 
