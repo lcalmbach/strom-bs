@@ -218,7 +218,7 @@ def consumption_month(df):
         settings = {'x': 'month_date', 'x_dt': 'T', 'y':'stromverbrauch_kwh', 'color':'Wochentag:O', 
             'tooltip':['year','month', 'stromverbrauch_kwh'], 
             'column':'month', 'col_dt': 'N', 'width':800,'height':400, 
-            'title': 'Zeitreihe Stromverbrauchs nach Monat',
+            'title': 'Zeitreihe Stromverbrauch nach Monat',
             'y_title': 'Stromverbrauch (GWh)',
             'x_title': ''}
         plots.line_chart(df, settings)
