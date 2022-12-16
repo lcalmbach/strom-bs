@@ -5,29 +5,22 @@ from os.path import exists
 from datetime import datetime, timedelta, date
 from utilities import load_css
 import requests
+import io
+import pytz
+import numpy as np
+
 import plots
-import config
+from const import *
 import text
 
-__version__ = '0.0.3'
+__version__ = '0.0.4'
 __author__ = 'Lukas Calmbach'
 __author_email__ = 'lcalmbach@gmail.com'
-VERSION_DATE = '2022-12-14'
+VERSION_DATE = '2022-12-16'
 my_name = 'Verbrauch Elektrizität im Kanton Basel-Stadt'
 my_kuerzel = "ElV-bs"
-SOURCE_FILE = './100233.csv'
-PARQUET_FILE = SOURCE_FILE.replace('csv', 'gzip')
-SOURCE_URL = 'https://data.bs.ch/explore/dataset/100233'
-GIT_REPO = 'https://github.com/lcalmbach/strom-bs'
 
-
-def_options_days = (1, 365)
-def_options_hours = (0, 23)
-def_options_weeks = (1, 53)
-def_options_months = (1,12)
-CURRENT_YEAR = date.today().year
-FIRST_YEAR = 2012
-
+utc=pytz.UTC
 
 def init():
     st.set_page_config(  # Alternate names: setup_page, page, layout
@@ -49,6 +42,34 @@ def get_info(last_date):
 
 @st.experimental_memo(ttl=6*3600, max_entries=3)
 def get_data():
+    def last_recort_timestamp():
+        response = requests.get(url_last_el_rec)
+        df = pd.read_csv(io.StringIO(response.text), sep=";")
+        df['timestamp_interval_start'] = pd.to_datetime(df['timestamp_interval_start'])
+        ts = df.iloc[0]['timestamp_interval_start']
+        return ts
+
+    def get_records(df, ts):
+        url = url_recent_records.format(ts.date())
+        response = requests.get(url)
+        df = pd.read_csv(io.StringIO(response.text), sep=";")
+        return df
+
+    def get_recent_data(df):
+        max_time_local = df['timestamp_interval_start'].max()
+        max_time_local = pd.Timestamp(max_time_local.year, max_time_local.month, max_time_local.day, max_time_local.hour, max_time_local.minute)
+        max_time_local = utc.localize(max_time_local)
+        max_time_remote = last_recort_timestamp().date()
+        if max_time_local < max_time_remote: # (max_time_remote - timedelta(days = 1)):
+            # get the new records starting on the start of the day
+            df_new_records = get_records(df, max_time_local)
+            # remove existing records from first day where records were missing
+            df = df[df['timestamp_interval_start'] < pd.Timestamp(max_time_remote).tz_localize('utc')]
+            # concat both
+            df = pd.concat([df, df_new_records], ignore_index=True)
+            df['timestamp_interval_start'] = pd.to_datetime(df['timestamp_interval_start'])
+        return df
+
     def add_aggregation_codes(df):
         df['year'] = df['timestamp_interval_start'].dt.year
         df['day'] = 15
@@ -75,6 +96,7 @@ def get_data():
 
     if exists(PARQUET_FILE):
         df = pd.read_parquet(PARQUET_FILE)
+        df = get_recent_data(df)
     else:
         df = pd.read_csv(SOURCE_FILE, sep=';')
         fields = ['timestamp_interval_start', 'stromverbrauch_kwh']
@@ -168,7 +190,7 @@ def consumption_day(df):
 
 @st.experimental_memo(ttl=6*3600, max_entries=3)
 def get_temperature_data():
-    url = config.url_daily_temperature
+    url = url_daily_temperature
     response = requests.get(url)
     data = response.json()
     df = [{'Year': x['record']['fields']['year(datum_zeit)'], 
@@ -182,7 +204,7 @@ def get_temperature_data():
     return df
 
 def consumption_month(df):
-    def show_plot(df):
+    def show_barchart(df):
         settings = {'x': 'year', 'x_dt': 'N', 'y':'stromverbrauch_kwh', 'color':'year:O', 
             'tooltip':['year','month', 'stromverbrauch_kwh'], 
             'column':'month', 'col_dt': 'N', 'width':700,'height':200, 
@@ -191,6 +213,15 @@ def consumption_month(df):
             'x_title': 'Stromverbrauch(GWh)'}
         
         plots.barchart(df, settings)
+    
+    def show_timeseries(df):
+        settings = {'x': 'month_date', 'x_dt': 'T', 'y':'stromverbrauch_kwh', 'color':'Wochentag:O', 
+            'tooltip':['year','month', 'stromverbrauch_kwh'], 
+            'column':'month', 'col_dt': 'N', 'width':800,'height':400, 
+            'title': 'Zeitreihe Stromverbrauchs nach Monat',
+            'y_title': 'Stromverbrauch (GWh)',
+            'x_title': ''}
+        plots.line_chart(df, settings)
 
     def get_filtered_data(df):
         with st.sidebar.expander('🔎 Filter', expanded=True):
@@ -204,14 +235,24 @@ def consumption_month(df):
             df = df[df['year'].isin(sel_years)]
         return df
 
-    df_month = get_filtered_data(df.copy())
-    df_month['stromverbrauch_kwh'] = df_month['stromverbrauch_kwh'] 
-    fields = ['year', 'month', 'stromverbrauch_kwh']
-    agg_fields = ['year','month']
-    df_month = df_month[fields].groupby(agg_fields).sum().reset_index()
+    df_filtered = get_filtered_data(df.copy())
+    fields = ['year', 'month', 'month_date', 'stromverbrauch_kwh']
+    agg_fields = ['year','month', 'month_date']
+    df_month = df_filtered[fields].groupby(agg_fields).sum().reset_index()
     df_month['stromverbrauch_kwh'] = df_month['stromverbrauch_kwh'].round(1)
-    df_month['month'] = df_month['month'].replace(config.MONTH_DICT)
-    show_plot(df_month)
+    df_month['month'] = df_month['month'].replace(MONTH_DICT)
+    show_barchart(df_month)
+    
+    df_filtered['weekday'] = ''
+    df_filtered.loc[df_filtered['day_of_week'] > 4, 'Wochentag'] = 'Wochenende'
+    df_filtered.loc[df_filtered['day_of_week'] < 5, 'Wochentag'] = 'Werktage'
+    fields = ['year', 'month', 'month_date', 'Wochentag', 'stromverbrauch_kwh']
+    agg_fields = ['year','month', 'month_date', 'Wochentag']
+
+    df_month = df_filtered[fields].groupby(agg_fields).sum().reset_index()
+    df_month['stromverbrauch_kwh'] = df_month['stromverbrauch_kwh'].round(1)
+    df_month['month'] = df_month['month'].replace(MONTH_DICT)
+    show_timeseries(df_month)
 
 
 def consumption_week(df):
@@ -265,10 +306,10 @@ def comparison_temp(df_consumption:pd.DataFrame):
     df_consumption = df_consumption[fields].groupby(agg_fields).sum().reset_index()
     df_consumption['stromverbrauch_kwh']=df_consumption['stromverbrauch_kwh']*1e3 #convert to MWh
     df = pd.merge(df_temp, df_consumption, on = "date", how = "inner")
-    df['Monat'] = df['Month'].replace(config.MONTH_DICT)
+    df['Monat'] = df['Month'].replace(MONTH_DICT)
     df = df.sort_values(by='date')
-    df_week_day = df[df['date'].dt.weekday.isin([0,1,2,3,4])]
-    df_weekend_day = df[df['date'].dt.weekday.isin([5,6])]
+    df_week_day = df[df['date'].dt.weekday < 5]
+    df_weekend_day = df[df['date'].dt.weekday > 4]
     title = 'Stromverbrauch in Funktion der mittleren Tagestemperatur im 2022, an Werktagen'
     show_plot(df_week_day, title)
     title = 'Stromverbrauch in Funktion der mittleren Tagestemperatur im 2022, an Wochenend-Tagen'
@@ -303,7 +344,6 @@ def main():
         consumption_day(df)
     elif menu_action == menu_options[4]:
         comparison_temp(df)
-
 
     st.sidebar.markdown(get_info(df['timestamp_interval_start'].max()), unsafe_allow_html=True)
 
