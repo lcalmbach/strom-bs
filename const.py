@@ -20,6 +20,6 @@ MONTH_DICT = {1:'Jan',2:'Feb',3:'Mrz',
     7:'Jul', 8:'Aug', 9:'Sep', 
     10:'Okt', 11:'Nov', 12:'Dez'}
 
-url_new_el_data = "https://data.bs.ch/api/v2/catalog/datasets/100233/exports/csv/?limit=-1&offset=0&timezone=UTC&where=timestamp_interval_start>date'2022-12-12"
-url_last_el_rec = "https://data.bs.ch/api/v2/catalog/datasets/100233/exports/csv?limit=1&timezone=UTC&select=timestamp_interval_start&offset=0&order_by=timestamp_interval_start%20DESC"
-url_recent_records = "https://data.bs.ch/api/v2/catalog/datasets/100233/exports/csv?limit=-1&timezone=UTC&where=timestamp_interval_start>date'2022-12-10'"
+#url_new_el_data = "https://data.bs.ch/api/v2/catalog/datasets/100233/exports/csv/?limit=-1&offset=0&timezone=UTC&where=timestamp_interval_start>date'2022-12-12"
+URL_LAST_EL_RECORD = "https://data.bs.ch/api/v2/catalog/datasets/100233/exports/csv?limit=1&timezone=UTC&select=timestamp_interval_start&offset=0&order_by=timestamp_interval_start%20DESC"
+URL_RECENT_RECORDS = "https://data.bs.ch/api/v2/catalog/datasets/100233/exports/csv?limit=-1&timezone=UTC&where=timestamp_interval_start>date'{}'"

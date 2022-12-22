@@ -13,10 +13,10 @@ import plots
 from const import *
 import text
 
-__version__ = '0.0.4'
+__version__ = '0.0.5'
 __author__ = 'Lukas Calmbach'
 __author_email__ = 'lcalmbach@gmail.com'
-VERSION_DATE = '2022-12-16'
+VERSION_DATE = '2022-12-22'
 my_name = 'Verbrauch Elektrizität im Kanton Basel-Stadt'
 my_kuerzel = "ElV-bs"
 
@@ -43,14 +43,14 @@ def get_info(last_date):
 @st.experimental_memo(ttl=6*3600, max_entries=3)
 def get_data():
     def last_recort_timestamp():
-        response = requests.get(url_last_el_rec)
+        response = requests.get(URL_LAST_EL_RECORD)
         df = pd.read_csv(io.StringIO(response.text), sep=";")
         df['timestamp_interval_start'] = pd.to_datetime(df['timestamp_interval_start'])
         ts = df.iloc[0]['timestamp_interval_start']
         return ts
 
     def get_records(df, ts):
-        url = url_recent_records.format(ts.date())
+        url = URL_RECENT_RECORDS.format(ts.date())
         response = requests.get(url)
         df = pd.read_csv(io.StringIO(response.text), sep=";")
         return df
@@ -99,13 +99,14 @@ def get_data():
         df = get_recent_data(df)
     else:
         df = pd.read_csv(SOURCE_URL, sep=';')
-        fields = ['timestamp_interval_start', 'stromverbrauch_kwh']
+        fields = ['timestamp_interval_start', 'stromverbrauch_kwh', 'grundversorgte_kunden_kwh']
         df['timestamp_interval_start'] = pd.to_datetime(df['timestamp_interval_start'], utc=True, errors='coerce')
         df = df[fields]
         df.to_parquet(PARQUET_FILE, compression='gzip')
     
     df = add_aggregation_codes(df)
-    df['stromverbrauch_kwh'] = df['stromverbrauch_kwh'] / 1e6
+    df[['stromverbrauch_kwh','grundversorgte_kunden_kwh']] = df[['stromverbrauch_kwh','grundversorgte_kunden_kwh']] / 1e6
+    
     # df = add_aggregation_codes(df)
     return df
 
@@ -119,7 +120,7 @@ def get_interval_dates(sel_days):
 
 
 def consumption_year(df):
-    def show_plot(df):
+    def show_dayinyear_plot(df):
         settings = {'x': 'day', 'y':'cum_stromverbrauch_kwh', 'color':'year:O', 'tooltip':['year','day', 'cum_stromverbrauch_kwh', 'stromverbrauch_kwh'], 
                 'width':800,'height':400, 'y_title': 'Kumulierter Verbrauch [GWh]', 'x_title': 'Tag im Jahr', 
                 'title': "Kumulierter Verbrauch"}
@@ -131,6 +132,12 @@ def consumption_year(df):
         settings['title'] = "Tages-Verbrauch"
         plots.line_chart(df, settings)
         # st.markdown(figure_text['year'][1])
+    
+    def show_timeseries(df):
+        settings = {'x': 'date', 'x_dt': 'T', 'y':'Verbrauch', 'color': 'Typ', 'tooltip':['date','Typ', 'Verbrauch'], 
+                'width':800,'height':400, 'y_title': 'Verbrauch [GWh]', 'x_title': '', 
+                'title': "Strom-Verbrauch Zeitreihe"}
+        plots.line_chart(df, settings)
 
     def get_filtered_data(df):
         with st.sidebar.expander('🔎 Filter', expanded=True):
@@ -143,15 +150,26 @@ def consumption_year(df):
             df = df[df['year'].isin(sel_years)]
         return df
 
-    df_year = get_filtered_data(df.copy())
+    _df = get_filtered_data(df.copy())
     fields = ['year', 'day', 'stromverbrauch_kwh']
     agg_fields = ['year', 'day']
-    df_year = df_year[fields].groupby(agg_fields).sum().reset_index()
-    df_year['cum_stromverbrauch_kwh'] = df_year.groupby(['year'])['stromverbrauch_kwh'].cumsum()
-    df_year['cum_stromverbrauch_kwh'] = df_year['cum_stromverbrauch_kwh'].round(1)
-    df_year['stromverbrauch_kwh'] = df_year['stromverbrauch_kwh'].round(3)
-    df_year = df_year[df_year['stromverbrauch_kwh'] > 2]
-    show_plot(df_year)
+    df_plot = _df[fields].groupby(agg_fields).sum().reset_index()
+    df_plot['cum_stromverbrauch_kwh'] = df_plot.groupby(['year'])['stromverbrauch_kwh'].cumsum()
+    df_plot['cum_stromverbrauch_kwh'] = df_plot['cum_stromverbrauch_kwh'].round(1)
+    df_plot['stromverbrauch_kwh'] = df_plot['stromverbrauch_kwh'].round(3)
+    df_plot = df_plot[df_plot['stromverbrauch_kwh'] > 2]
+    show_dayinyear_plot(df_plot)
+
+    fields = ['date', 'stromverbrauch_kwh', 'grundversorgte_kunden_kwh']
+    agg_fields = ['date']
+    df_plot = _df[fields].groupby(agg_fields).sum().reset_index()
+    df_plot.columns = ['date', 'Total', 'Grundversorgte Kunden']
+    df_plot = pd.melt(df_plot, id_vars=['date'], value_vars=['Total', 'Grundversorgte Kunden'],
+            var_name='Typ', value_name='Verbrauch', col_level=None)
+    
+    df_plot['Verbrauch'] = df_plot['Verbrauch'].round(2)
+    df_plot = df_plot[df_plot['Verbrauch'] > 0.1]
+    show_timeseries(df_plot)
 
 
 def consumption_day(df):
