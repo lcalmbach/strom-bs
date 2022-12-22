@@ -98,7 +98,7 @@ def get_data():
         df = pd.read_parquet(PARQUET_FILE)
         df = get_recent_data(df)
     else:
-        df = pd.read_csv(SOURCE_FILE, sep=';')
+        df = pd.read_csv(SOURCE_URL, sep=';')
         fields = ['timestamp_interval_start', 'stromverbrauch_kwh']
         df['timestamp_interval_start'] = pd.to_datetime(df['timestamp_interval_start'], utc=True, errors='coerce')
         df = df[fields]
