@@ -43,9 +43,9 @@ def get_info(last_date):
     return text
 
 
-@st.experimental_memo(ttl=6 * 3600, max_entries=3)
+@st.cache_data(ttl=6 * 3600, max_entries=3)
 def get_data():
-    def last_recort_timestamp():
+    def last_record_timestamp():
         response = requests.get(URL_LAST_EL_RECORD)
         df = pd.read_csv(io.StringIO(response.text), sep=";")
         df["timestamp_interval_start"] = pd.to_datetime(df["timestamp_interval_start"])
@@ -67,8 +67,8 @@ def get_data():
             max_time_local.hour,
             max_time_local.minute,
         )
-        max_time_local = utc.localize(max_time_local)
-        max_time_remote = last_recort_timestamp().date()
+        max_time_local = utc.localize(max_time_local).tz_localize(None)
+        max_time_remote = last_record_timestamp().tz_localize(None)
         if max_time_local < max_time_remote:  # (max_time_remote - timedelta(days = 1)):
             # get the new records starting on the start of the day
             df_new_records = get_records(df, max_time_local)
@@ -285,7 +285,7 @@ def consumption_day(df):
     show_plot(df_time)
 
 
-@st.experimental_memo(ttl=6 * 3600, max_entries=3)
+@st.cache_data(ttl=6 * 3600, max_entries=3)
 def get_temperature_data():
     url = url_daily_temperature
     response = requests.get(url)
